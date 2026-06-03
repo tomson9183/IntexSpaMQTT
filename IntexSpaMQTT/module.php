@@ -409,7 +409,9 @@ class IntexSpaMQTT extends IPSModuleStrict
             return;
         }
         $base = $this->ReadPropertyString('BaseTopic');
-        $topic = $base . '/set/' . $suffix;
+        // Wert ins TOPIC codieren – der MQTT-Server überträgt Topics zuverlässig,
+        // den Payload verstümmelt er bei selbstgebauten Paketen. Format: base/set/<name>/<wert>
+        $topic = $base . '/set/' . $suffix . '/' . $payload;
 
         $json = json_encode([
             'DataID'           => self::MQTT_TX,
@@ -419,8 +421,6 @@ class IntexSpaMQTT extends IPSModuleStrict
             'Topic'            => $topic,
             'Payload'          => $payload,
         ]);
-        // Diagnose: zeigt das exakte Sende-Paket in "Meldungen"
-        $this->LogMessage('MQTT-Send: ' . $json, KL_NOTIFY);
         $this->SendDataToParent($json);
     }
 
