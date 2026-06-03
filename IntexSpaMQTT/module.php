@@ -232,25 +232,41 @@ class IntexSpaMQTT extends IPSModuleStrict
             echo "Kein 'MQTT Server' gefunden. Bitte zuerst eine MQTT-Server-Instanz anlegen.";
             return;
         }
-        if (count($servers) > 1) {
-            $list = '';
-            foreach ($servers as $s) {
-                $list .= "\n - ID $s: " . IPS_GetName($s);
+
+        // Den RICHTIGEN MQTT-Server wählen: der mit eigenem Parent (Server Socket)
+        // und aktivem Status. Verwaiste Server (Parent 0) führen zu "inkompatibel".
+        $best = 0;
+        $list = '';
+        foreach ($servers as $s) {
+            $si = IPS_GetInstance($s);
+            $hasSocket = ((int) $si['ConnectionID'] !== 0);
+            $active = ((int) $si['InstanceStatus'] === 102);
+            $list .= "\n  - ID $s: " . IPS_GetName($s)
+                   . " (Status " . $si['InstanceStatus'] . ", Socket: " . ($hasSocket ? 'ja' : 'nein') . ")";
+            if ($best === 0 && $hasSocket) {
+                $best = $s; // erster Server mit Socket
             }
-            echo "Mehrere MQTT-Server gefunden, verbinde mit dem ersten." . $list;
+            if ($hasSocket && $active) {
+                $best = $s; // bevorzugt aktiv + Socket
+            }
         }
-        $mqtt = $servers[0];
+        if ($best === 0) {
+            $best = $servers[0];
+        }
+
         try {
-            IPS_ConnectInstance($this->InstanceID, $mqtt);
+            IPS_ConnectInstance($this->InstanceID, $best);
             IPS_ApplyChanges($this->InstanceID);
             $info = IPS_GetInstance($this->InstanceID);
-            if ((int) $info['ConnectionID'] === (int) $mqtt) {
-                echo "Erfolgreich mit MQTT Server (ID $mqtt, " . IPS_GetName($mqtt) . ") verbunden. Konsole ggf. neu laden.";
+            if ((int) $info['ConnectionID'] === (int) $best) {
+                echo "ERFOLG: verbunden mit MQTT Server ID $best (" . IPS_GetName($best) . ").\n"
+                   . "Bitte Konsole neu laden.\n\nGefundene MQTT-Server:" . $list;
             } else {
-                echo "Verbindung gesetzt, ConnectionID = " . $info['ConnectionID'] . ". Bitte Konsole neu laden und prüfen.";
+                echo "Verbindung nicht gesetzt (ConnectionID = " . $info['ConnectionID'] . ").\n\nGefundene MQTT-Server:" . $list;
             }
         } catch (Exception $e) {
-            echo "Fehler beim Verbinden: " . $e->getMessage();
+            echo "Fehler beim Verbinden mit ID $best: " . $e->getMessage()
+               . "\n\nGefundene MQTT-Server:" . $list;
         }
     }
 
