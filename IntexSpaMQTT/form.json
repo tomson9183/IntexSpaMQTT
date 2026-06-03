@@ -48,6 +48,15 @@
     ],
     "actions": [
         {
+            "type": "Label",
+            "caption": "Falls oben kein MQTT-Server-Gateway verbunden ist, hier per Knopfdruck verbinden:"
+        },
+        {
+            "type": "Button",
+            "caption": "Mit MQTT Server verbinden",
+            "onClick": "ISPA_ConnectGateway($id);"
+        },
+        {
             "type": "Button",
             "caption": "Status anfordern",
             "onClick": "ISPA_RequestStatus($id);"

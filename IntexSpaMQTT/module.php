@@ -222,6 +222,39 @@ class IntexSpaMQTT extends IPSModuleStrict
     }
 
     /**
+     * Verbindet diese Instanz per Knopfdruck mit dem MQTT-Server
+     * (umgeht den hängenden "Gateway ändern"-Dialog).
+     */
+    public function ConnectGateway(): void
+    {
+        $servers = IPS_GetInstanceListByModuleID('{C6D2AEB3-6E1F-4B2E-8E69-3A1A00246850}');
+        if (count($servers) === 0) {
+            echo "Kein 'MQTT Server' gefunden. Bitte zuerst eine MQTT-Server-Instanz anlegen.";
+            return;
+        }
+        if (count($servers) > 1) {
+            $list = '';
+            foreach ($servers as $s) {
+                $list .= "\n - ID $s: " . IPS_GetName($s);
+            }
+            echo "Mehrere MQTT-Server gefunden, verbinde mit dem ersten." . $list;
+        }
+        $mqtt = $servers[0];
+        try {
+            IPS_ConnectInstance($this->InstanceID, $mqtt);
+            IPS_ApplyChanges($this->InstanceID);
+            $info = IPS_GetInstance($this->InstanceID);
+            if ((int) $info['ConnectionID'] === (int) $mqtt) {
+                echo "Erfolgreich mit MQTT Server (ID $mqtt, " . IPS_GetName($mqtt) . ") verbunden. Konsole ggf. neu laden.";
+            } else {
+                echo "Verbindung gesetzt, ConnectionID = " . $info['ConnectionID'] . ". Bitte Konsole neu laden und prüfen.";
+            }
+        } catch (Exception $e) {
+            echo "Fehler beim Verbinden: " . $e->getMessage();
+        }
+    }
+
+    /**
      * Status von der Brücke anfordern (Brücke published ohnehin regelmäßig).
      */
     public function RequestStatus(): void
