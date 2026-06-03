@@ -411,14 +411,17 @@ class IntexSpaMQTT extends IPSModuleStrict
         $base = $this->ReadPropertyString('BaseTopic');
         $topic = $base . '/set/' . $suffix;
 
-        $this->SendDataToParent(json_encode([
+        $json = json_encode([
             'DataID'           => self::MQTT_TX,
             'PacketType'       => 3,
             'QualityOfService' => 0,
             'Retain'           => false,
             'Topic'            => $topic,
             'Payload'          => $payload,
-        ]));
+        ]);
+        // Diagnose: zeigt das exakte Sende-Paket in "Meldungen"
+        $this->LogMessage('MQTT-Send: ' . $json, KL_NOTIFY);
+        $this->SendDataToParent($json);
     }
 
     // ── Visualisierung ──────────────────────────────────────────────────────
