@@ -1,0 +1,21 @@
+{
+    "id": "{D6EB2013-8F04-4C7B-AD9E-3041526374F0}",
+    "name": "IntexSpaMQTT",
+    "type": 3,
+    "vendor": "Intex",
+    "aliases": [
+        "Intex PureSpa MQTT",
+        "Intex Spa Tuya",
+        "Whirlpool Intex MQTT"
+    ],
+    "url": "https://github.com/tomson9183/IPSymcon-IntexSpaMQTT",
+    "parentRequirements": [
+        "{7A1272A4-CBDB-46EF-BFC6-DCF4A53D2FC7}",
+        "{043EA491-0325-4ADD-8FC2-A30C8EEB4D3F}",
+        "{7F7632D9-FA40-4F38-8DEA-C83CD4325A32}",
+        "{DBDA9DF7-5D04-F49D-370A-2B9153D00D9B}"
+    ],
+    "childRequirements": [],
+    "implemented": [],
+    "prefix": "ISPA"
+}
