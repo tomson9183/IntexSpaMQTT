@@ -147,11 +147,27 @@ class IntexSpaMQTT extends IPSModuleStrict
             return '';
         }
 
-        // DIAGNOSE: jede empfangene Nachricht ins Meldungsfenster
-        $this->LogMessage('RX  ' . $topic . ' = ' . $payload, KL_NOTIFY);
+        // Der IP-Symcon MQTT-Server liefert den Payload HEX-codiert (z.B. "4F4E" = "ON").
+        $payload = $this->DecodeMqttPayload((string)$payload);
 
         $this->HandleTopic((string)$topic, (string)$payload);
         return '';
+    }
+
+    /**
+     * Dekodiert einen ggf. HEX-codierten MQTT-Payload (so liefert ihn der
+     * IP-Symcon MQTT-Server). "4F4E" -> "ON", "3232" -> "22". Reiner Text
+     * (oder bereits dekodiert) wird unveraendert zurueckgegeben.
+     */
+    private function DecodeMqttPayload(string $p): string
+    {
+        if ($p !== '' && strlen($p) % 2 === 0 && ctype_xdigit($p)) {
+            $bin = @hex2bin($p);
+            if ($bin !== false && $bin !== '') {
+                return $bin;
+            }
+        }
+        return $p;
     }
 
     private function HandleTopic(string $topic, string $payload): void
@@ -163,9 +179,6 @@ class IntexSpaMQTT extends IPSModuleStrict
         }
         $key = substr($topic, strlen($prefix));
         $on = (strtoupper($payload) === 'ON' || strtoupper($payload) === 'TRUE' || $payload === '1');
-
-        // DIAGNOSE: was wird aus dem Status gemacht
-        $this->LogMessage('STATUS key=' . $key . ' payload=' . $payload . ' -> on=' . ($on ? '1' : '0'), KL_NOTIFY);
 
         switch ($key) {
             case 'online':
@@ -199,9 +212,6 @@ class IntexSpaMQTT extends IPSModuleStrict
 
     public function RequestAction(string $ident, mixed $value): void
     {
-        // DIAGNOSE: jeder Schaltklick ins Meldungsfenster
-        $this->LogMessage('ACTION ' . $ident . ' = ' . json_encode($value), KL_NOTIFY);
-
         switch ($ident) {
             case 'Power':
             case 'Filter':
