@@ -153,7 +153,9 @@
     }
     document.getElementById('cur').textContent = (s.current>0)?s.current:'--';
     document.getElementById('tgt').textContent = s.target;
-    ispaBtn('heater', s.heater); ispaBtn('filter', s.filter); ispaBtn('bubbles', s.bubbles);
+    // Filterpumpe laeuft auch, wenn geheizt oder hygienisiert wird (DP 106 = nur manuelle Taste)
+    var filterRunning = s.filter || s.heater || s.sanitizer;
+    ispaBtn('heater', s.heater); ispaBtn('filter', filterRunning); ispaBtn('bubbles', s.bubbles);
     ispaBtn('jets', s.jets); ispaBtn('sanitizer', s.sanitizer);
     ispaRenderSchedule();
   }
