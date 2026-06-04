@@ -7,6 +7,13 @@
   .ispa-conn { display:flex; align-items:center; gap:6px; font-size:12px; opacity:.7; }
   .ispa-dot { width:9px; height:9px; border-radius:50%; background:#9aa0a6; }
   .ispa-dot.on { background:#34c759; box-shadow:0 0 6px #34c759; }
+  .ispa-power { width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+                cursor:pointer; font-size:19px; border:1px solid rgba(127,127,127,0.25);
+                background:rgba(127,127,127,0.10); color:inherit; transition:all .15s; }
+  .ispa-power.on { background:#34c759; color:#fff; border-color:transparent; box-shadow:0 0 9px rgba(52,199,89,.55); }
+  .ispa-head-right { display:flex; align-items:center; gap:12px; }
+  .ispa-off-note { font-size:12px; opacity:.6; text-align:center; margin-bottom:10px; }
+  .ispa-dim { opacity:.4; pointer-events:none; }
   .ispa-tabs { display:flex; gap:6px; margin-bottom:14px; }
   .ispa-tab { flex:1; text-align:center; padding:8px; border-radius:10px; cursor:pointer; font-size:13px; font-weight:600;
               border:1px solid rgba(127,127,127,0.2); background:rgba(127,127,127,0.06); }
@@ -52,7 +59,10 @@
 <div class="ispa" id="ispa">
   <div class="ispa-head">
     <span class="ispa-title">Intex PureSpa</span>
-    <span class="ispa-conn"><span class="ispa-dot" id="dot"></span><span id="conn">--</span></span>
+    <div class="ispa-head-right">
+      <span class="ispa-conn"><span class="ispa-dot" id="dot"></span><span id="conn">--</span></span>
+      <div class="ispa-power" id="b-power" onclick="ispaToggle('Power')" title="Spa ein-/ausschalten">&#9211;</div>
+    </div>
   </div>
 
   <div class="ispa-tabs">
@@ -62,6 +72,8 @@
 
   <!-- STEUERUNG -->
   <div id="view-control">
+    <div class="ispa-off-note hidden" id="off-note">Spa ist ausgeschaltet &ndash; zum Steuern oben einschalten.</div>
+    <div id="control-inner">
     <div class="ispa-temp">
       <div><div class="ispa-cur"><span id="cur">--</span><small>&deg;C</small></div><div class="ispa-lbl">Ist</div></div>
       <div class="ispa-tgt">
@@ -79,6 +91,7 @@
       <div class="ispa-btn bubbles" id="b-bubbles" onclick="ispaToggle('Bubbles')"><span class="ico">&#127754;</span>Sprudler</div>
       <div class="ispa-btn jets" id="b-jets" onclick="ispaToggle('Jets')"><span class="ico">&#128168;</span>Jets</div>
       <div class="ispa-btn sanitizer" id="b-sanitizer" onclick="ispaToggle('Sanitizer')" style="grid-column:1/-1;"><span class="ico">&#128167;</span>Hygienisierung</div>
+    </div>
     </div>
   </div>
 
@@ -130,6 +143,14 @@
     document.getElementById('ispa').className = 'ispa' + (s.connected?'':' offline');
     document.getElementById('dot').className = 'ispa-dot' + (s.connected?' on':'');
     document.getElementById('conn').textContent = s.connected?'verbunden':'offline';
+    var pw = document.getElementById('b-power');
+    if (pw) pw.className = 'ispa-power' + (s.power?' on':'');
+    var note = document.getElementById('off-note');
+    var inner = document.getElementById('control-inner');
+    if (note && inner) {
+      if (s.power) { note.className = 'ispa-off-note hidden'; inner.className = ''; }
+      else { note.className = 'ispa-off-note'; inner.className = 'ispa-dim'; }
+    }
     document.getElementById('cur').textContent = (s.current>0)?s.current:'--';
     document.getElementById('tgt').textContent = s.target;
     ispaBtn('heater', s.heater); ispaBtn('filter', s.filter); ispaBtn('bubbles', s.bubbles);

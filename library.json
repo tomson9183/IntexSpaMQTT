@@ -2,12 +2,12 @@
     "id": "{C5DA1F02-7E93-4B6A-9C8D-2F3A4B5C6D7E}",
     "author": "tomson9183",
     "name": "IntexSpaMQTT",
-    "description": "IP-Symcon Modul zur lokalen Steuerung von Intex PureSpa Whirlpools (Tuya, ab 2024) über MQTT. Mit Steuerungs- und Zeitplan-Kachel sowie Energie-Manager-Anbindung.",
+    "description": "IP-Symcon Modul zur lokalen Steuerung von Intex PureSpa Whirlpools (Tuya, ab 2024) über MQTT. Mit Steuerungs- und Zeitplan-Kachel (inkl. Ein/Aus) sowie Energie-Manager-Anbindung.",
     "url": "https://github.com/tomson9183/IPSymcon-IntexSpaMQTT",
     "compatibility": {
         "version": "7.0"
     },
-    "version": "2.2.1",
-    "build": 12,
+    "version": "2.3.0",
+    "build": 13,
     "date": 1749081600
 }
