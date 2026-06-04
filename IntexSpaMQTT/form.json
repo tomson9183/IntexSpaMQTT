@@ -7,16 +7,20 @@
         },
         {
             "type": "Label",
-            "caption": "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            "caption": "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         },
         {
             "type": "Label",
-            "caption": "Energie-Manager (PV-Überschuss-Heizung)"
+            "caption": "Anbindung an den offiziellen 'Energie Manager'"
         },
         {
             "type": "CheckBox",
             "name": "EnableEnergyManager",
-            "caption": "Energie-Manager-Unterstützung aktivieren"
+            "caption": "PV-Heizung-Schalter bereitstellen (für Energie Manager)"
+        },
+        {
+            "type": "Label",
+            "caption": "Es entsteht die Variable 'PV-Heizung (Energie Manager)'. Diese trägst du im Energie Manager als Verbraucher ein. Beim Einschalten macht das Modul automatisch zuerst den Strom an und dann die Heizung; beim Ausschalten erst die Heizung aus und dann das Gerät (falls keine andere Funktion läuft)."
         },
         {
             "type": "NumberSpinner",
@@ -26,24 +30,28 @@
             "maximum": 5000
         },
         {
+            "type": "Label",
+            "caption": "── Manueller Vorrang ──────────────────────────"
+        },
+        {
+            "type": "Label",
+            "caption": "Schaltest du Heizung oder Gerät von Hand (Kachel/Gerät), wird die Variable 'PV-Automatik freigegeben' auf AUS gesetzt. Trage diese Variable im Energie Manager beim Verbraucher unter 'Bedingung' ein (muss WAHR sein) – dann übersteuert die Automatik deine Handschaltung nicht mehr."
+        },
+        {
+            "type": "SelectScript",
+            "name": "ManualPushScriptID",
+            "caption": "Push-Skript für Erinnerung (optional, 0 = nur Log)"
+        },
+        {
             "type": "NumberSpinner",
-            "name": "MinPVSurplus",
-            "caption": "Minimaler PV-Überschuss zum Einschalten (Watt)",
-            "minimum": 100,
-            "maximum": 5000
-        },
-        {
-            "type": "SelectVariable",
-            "name": "PVSurplusVariableID",
-            "caption": "PV-Überschuss-Variable (Watt, positiv = Überschuss)"
+            "name": "ManualOverrideResumeHours",
+            "caption": "PV-Automatik nach X Stunden automatisch wieder freigeben (0 = nie)",
+            "minimum": 0,
+            "maximum": 48
         },
         {
             "type": "Label",
-            "caption": "Hinweis: Bei aktivem PV-Vorrang darf der Zeitplan die Heizung nur einschalten, wenn genug PV-Überschuss vorhanden ist. Filter/Sprudler/Jets/Hygienisierung bleiben unbeeinflusst."
-        },
-        {
-            "type": "Label",
-            "caption": "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            "caption": "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         }
     ],
     "actions": [

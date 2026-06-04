@@ -12,7 +12,7 @@
  * Kachel mit Steuerung + Zeitplan, Energie-Manager (PV-Überschuss).
  *
  * Autor: tomson9183
- * Version: 2.0.0
+ * Version: 2.4.0
  */
 
 declare(strict_types=1);
@@ -37,10 +37,11 @@ class IntexSpaMQTT extends IPSModuleStrict
         parent::Create();
 
         $this->RegisterPropertyString('BaseTopic', 'intexspa');
-        $this->RegisterPropertyBoolean('EnableEnergyManager', false);
+        $this->RegisterPropertyBoolean('EnableEnergyManager', true);
         $this->RegisterPropertyInteger('PowerConsumptionHeating', 2200);
-        $this->RegisterPropertyInteger('MinPVSurplus', 500);
-        $this->RegisterPropertyInteger('PVSurplusVariableID', 0);
+        // Manueller Vorrang: optionales Push-Skript + automatische Wiederfreigabe
+        $this->RegisterPropertyInteger('ManualPushScriptID', 0);
+        $this->RegisterPropertyInteger('ManualOverrideResumeHours', 0);
 
         $this->RegisterVariableBoolean('Power', 'Gerät Ein/Aus', '~Switch', 10);
         $this->EnableAction('Power');
@@ -62,13 +63,18 @@ class IntexSpaMQTT extends IPSModuleStrict
 
         $this->RegisterVariableBoolean('Connected', 'Verbunden', '~Switch', 90);
 
-        // Energie-Manager
-        $this->RegisterVariableBoolean('EMSwitch', 'EM Schaltvariable (Heizung)', '~Switch', 100);
+        // Energie-Manager-Anbindung: EINE Schaltvariable, die der offizielle
+        // "Energie Manager" als Verbraucher schaltet. Unser Modul erledigt
+        // beim Schalten die Reihenfolge (Strom -> Heizung an / Heizung -> Strom aus).
+        $this->RegisterVariableBoolean('EMSwitch', 'PV-Heizung (Energie Manager)', '~Switch', 100);
         $this->EnableAction('EMSwitch');
-        $this->RegisterVariableInteger('EMPowerConsumption', 'EM Leistungsaufnahme (W)', '', 110);
+        $this->RegisterVariableInteger('EMPowerConsumption', 'PV-Heizung Leistung (W)', '', 110);
 
-        // PV-Vorrang: ob aktuell genug Überschuss zum Heizen da ist
-        $this->RegisterVariableBoolean('PVHeatingAllowed', 'PV-Heizen erlaubt', '~Switch', 115);
+        // Manueller Vorrang: solange false, soll die PV-Automatik NICHT schalten
+        // (im Energie Manager als Bedingung verwenden). Wird durch manuelles
+        // Schalten von Heizung/Strom automatisch auf false gesetzt.
+        $this->RegisterVariableBoolean('AutomatikActive', 'PV-Automatik freigegeben', '~Switch', 105);
+        $this->EnableAction('AutomatikActive');
 
         // Zeitplan (als JSON-String gespeichert)
         $this->RegisterVariableString('Schedule', 'Zeitplan (intern)', '', 120);
@@ -89,16 +95,23 @@ class IntexSpaMQTT extends IPSModuleStrict
         $this->ApplyProfile('TargetTemperature', 'ISPA.TargetTemp');
 
         // Interne Variablen verstecken
-        IPS_SetHidden($this->GetIDForIdent('PVHeatingAllowed'), true);
         IPS_SetHidden($this->GetIDForIdent('Schedule'), true);
+
+        // PV-Automatik beim ersten Einrichten freigeben
+        if ($this->GetBuffer('Initialized') !== '1') {
+            $this->SetValue('AutomatikActive', true);
+            $this->SetBuffer('Initialized', '1');
+        }
 
         $base = $this->ReadPropertyString('BaseTopic');
         // Nur Nachrichten unseres Spas vom MQTT-Server annehmen
         $this->SetReceiveDataFilter('.*' . preg_quote($base) . '.*');
 
         $this->SetValue('EMPowerConsumption', $this->ReadPropertyInteger('PowerConsumptionHeating'));
-        IPS_SetHidden($this->GetIDForIdent('EMSwitch'), !$this->ReadPropertyBoolean('EnableEnergyManager'));
-        IPS_SetHidden($this->GetIDForIdent('EMPowerConsumption'), !$this->ReadPropertyBoolean('EnableEnergyManager'));
+        $emOff = !$this->ReadPropertyBoolean('EnableEnergyManager');
+        IPS_SetHidden($this->GetIDForIdent('EMSwitch'), $emOff);
+        IPS_SetHidden($this->GetIDForIdent('EMPowerConsumption'), $emOff);
+        IPS_SetHidden($this->GetIDForIdent('AutomatikActive'), $emOff);
 
         // Prüfen ob ein Parent (MQTT) verbunden ist
         if ($this->HasActiveParent()) {
@@ -213,7 +226,6 @@ class IntexSpaMQTT extends IPSModuleStrict
     public function RequestAction(string $ident, mixed $value): void
     {
         switch ($ident) {
-            case 'Power':
             case 'Filter':
             case 'Bubbles':
             case 'Jets':
@@ -221,18 +233,44 @@ class IntexSpaMQTT extends IPSModuleStrict
                 $this->PublishSet(self::SET_TOPICS[$ident], ((bool)$value) ? 'ON' : 'OFF');
                 $this->SetValue($ident, (bool)$value);
                 break;
+
+            case 'Power':
+                // Manuelles Schalten des Geräts -> PV-Automatik pausieren
+                $on = (bool)$value;
+                $this->PublishSet('power', $on ? 'ON' : 'OFF');
+                $this->SetValue('Power', $on);
+                $this->ManualOverride($on ? 'Spa manuell EINGESCHALTET' : 'Spa manuell AUSGESCHALTET');
+                break;
+
             case 'Heater':
-            case 'EMSwitch':
+                // Manuelles Schalten der Heizung -> PV-Automatik pausieren
                 $on = (bool)$value;
                 $this->PublishSet('heater', $on ? 'ON' : 'OFF');
                 $this->SetValue('Heater', $on);
                 $this->SetValue('EMSwitch', $on);
+                $this->ManualOverride($on ? 'Heizung manuell EINGESCHALTET' : 'Heizung manuell AUSGESCHALTET');
                 break;
+
+            case 'EMSwitch':
+                // Vom Energie Manager geschaltet -> Reihenfolge erledigen (kein manueller Vorrang)
+                $this->SwitchPVHeating((bool)$value);
+                break;
+
+            case 'AutomatikActive':
+                // Benutzer gibt die PV-Automatik wieder frei (oder sperrt sie)
+                $this->SetValue('AutomatikActive', (bool)$value);
+                if ((bool)$value) {
+                    $this->SetBuffer('ManualSince', '0');
+                    $this->LogMessage('PV-Automatik wieder freigegeben.', KL_NOTIFY);
+                }
+                break;
+
             case 'TargetTemperature':
                 $t = max(20, min(40, (int)$value));
                 $this->PublishSet('target_temp', (string)$t);
                 $this->SetValue('TargetTemperature', $t);
                 break;
+
             case 'Schedule':
                 $this->SaveSchedule((string)$value);
                 break;
@@ -298,45 +336,83 @@ class IntexSpaMQTT extends IPSModuleStrict
         $this->PublishSet('refresh', '1');
     }
 
-    // ── Energie-Manager ───────────────────────────────────────────────────────
+    // ── Energie-Manager-Anbindung ───────────────────────────────────────────────
 
-    public function SetHeaterByPVSurplus(float $pvSurplusWatts): void
+    /**
+     * Schaltet die PV-Heizung in der richtigen Reihenfolge.
+     * EIN:  erst Strom (Gerät) an, dann Heizung an (die Brücke startet die
+     *       Filterpumpe automatisch mit).
+     * AUS:  erst Heizung aus, dann – falls keine andere Funktion läuft –
+     *       das Gerät komplett aus.
+     */
+    private function SwitchPVHeating(bool $on): void
     {
-        if (!$this->ReadPropertyBoolean('EnableEnergyManager')) {
-            return;
-        }
-        $heaterPower = $this->ReadPropertyInteger('PowerConsumptionHeating');
-        $minSurplus = $this->ReadPropertyInteger('MinPVSurplus');
-
-        if ($pvSurplusWatts >= $heaterPower) {
-            $this->SetValue('PVHeatingAllowed', true);
-            if (!$this->GetValue('Heater')) {
-                $this->RequestAction('Heater', true);
+        if ($on) {
+            if (!$this->GetValue('Power')) {
+                $this->PublishSet('power', 'ON');
+                $this->SetValue('Power', true);
             }
-        } elseif ($pvSurplusWatts < $minSurplus) {
-            $this->SetValue('PVHeatingAllowed', false);
-            if ($this->GetValue('Heater')) {
-                $this->RequestAction('Heater', false);
+            $this->PublishSet('heater', 'ON');
+            $this->SetValue('Heater', true);
+        } else {
+            $this->PublishSet('heater', 'OFF');
+            $this->SetValue('Heater', false);
+            $otherActive = $this->GetValue('Jets')
+                || $this->GetValue('Bubbles')
+                || $this->GetValue('Sanitizer');
+            if (!$otherActive) {
+                $this->PublishSet('power', 'OFF');
+                $this->SetValue('Power', false);
             }
         }
-        // Im Hysterese-Band: Zustand und PVHeatingAllowed unverändert lassen
+        $this->SetValue('EMSwitch', $on);
     }
 
     /**
-     * Liest die konfigurierte PV-Überschuss-Variable und steuert danach
-     * die Heizung (PV-Vorrang). Wird jede Minute aufgerufen.
+     * Wird bei MANUELLEM Schalten von Heizung/Strom aufgerufen: pausiert die
+     * PV-Automatik (AutomatikActive=false – im Energie Manager als Bedingung
+     * nutzen) und schickt eine Erinnerung per Push/Log.
      */
-    private function EvaluatePV(): void
+    private function ManualOverride(string $reason): void
     {
         if (!$this->ReadPropertyBoolean('EnableEnergyManager')) {
             return;
         }
-        $varID = $this->ReadPropertyInteger('PVSurplusVariableID');
-        if ($varID <= 0 || !IPS_VariableExists($varID)) {
+        if ($this->GetValue('AutomatikActive')) {
+            $this->SetValue('AutomatikActive', false);
+        }
+        $this->SetBuffer('ManualSince', (string)time());
+        $this->notifyManual($reason . ' – PV-Automatik pausiert.');
+    }
+
+    private function notifyManual(string $text): void
+    {
+        $this->LogMessage($text, KL_NOTIFY);
+        $sid = $this->ReadPropertyInteger('ManualPushScriptID');
+        if ($sid > 0 && @IPS_ScriptExists($sid)) {
+            @IPS_RunScriptEx($sid, ['Titel' => 'Intex Spa', 'Text' => $text]);
+        }
+    }
+
+    /**
+     * Gibt die PV-Automatik nach einer einstellbaren Zeit automatisch wieder
+     * frei (0 Stunden = nie automatisch). Wird jede Minute geprüft.
+     */
+    private function AutoResumeAutomatik(): void
+    {
+        if (!$this->ReadPropertyBoolean('EnableEnergyManager')) {
             return;
         }
-        $watts = (float)GetValue($varID);
-        $this->SetHeaterByPVSurplus($watts);
+        $hours = $this->ReadPropertyInteger('ManualOverrideResumeHours');
+        if ($hours <= 0 || $this->GetValue('AutomatikActive')) {
+            return;
+        }
+        $since = (int)$this->GetBuffer('ManualSince');
+        if ($since > 0 && (time() - $since) >= $hours * 3600) {
+            $this->SetValue('AutomatikActive', true);
+            $this->SetBuffer('ManualSince', '0');
+            $this->LogMessage('PV-Automatik nach ' . $hours . ' h automatisch wieder freigegeben.', KL_NOTIFY);
+        }
     }
 
     // ── Zeitplan ──────────────────────────────────────────────────────────────
@@ -357,7 +433,7 @@ class IntexSpaMQTT extends IPSModuleStrict
      */
     public function CheckSchedule(): void
     {
-        $this->EvaluatePV();
+        $this->AutoResumeAutomatik();
 
         $json = $this->GetValue('Schedule');
         $entries = json_decode($json, true);
@@ -405,16 +481,12 @@ class IntexSpaMQTT extends IPSModuleStrict
             $ident = ucfirst($action);
             $on = (bool)$value;
 
-            // PV-Vorrang: Heizung per Zeitplan nur einschalten, wenn genug PV-Überschuss da ist
-            if ($ident === 'Heater' && $on
-                && $this->ReadPropertyBoolean('EnableEnergyManager')
-                && $this->ReadPropertyInteger('PVSurplusVariableID') > 0
-                && !$this->GetValue('PVHeatingAllowed')) {
-                $this->LogMessage('Zeitplan: Heizung verschoben – kein ausreichender PV-Überschuss.', KL_NOTIFY);
-                return;
+            if ($ident === 'Heater') {
+                // Reihenfolge beachten, Automatik dabei NICHT als "manuell" pausieren
+                $this->SwitchPVHeating($on);
+            } else {
+                $this->RequestAction($ident, $on);
             }
-
-            $this->RequestAction($ident, $on);
             $this->LogMessage("Zeitplan: {$ident} -> " . ($on ? 'EIN' : 'AUS'), KL_NOTIFY);
         }
     }
