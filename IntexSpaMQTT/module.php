@@ -114,6 +114,17 @@ class IntexSpaMQTT extends IPSModuleStrict
         IPS_SetHidden($this->GetIDForIdent('EMPowerConsumption'), false);
         IPS_SetHidden($this->GetIDForIdent('AutomatikActive'), false);
 
+        // Altes Standard-Label auf neuen Namen umstellen (nur wenn unverändert,
+        // damit eigene Umbenennungen erhalten bleiben).
+        $emId = $this->GetIDForIdent('EMSwitch');
+        if ($emId && IPS_GetName($emId) === 'EM Schaltvariable (Heizung)') {
+            IPS_SetName($emId, 'PV-Heizung (Energie Manager)');
+        }
+        $empId = $this->GetIDForIdent('EMPowerConsumption');
+        if ($empId && IPS_GetName($empId) === 'EM Leistungsaufnahme (W)') {
+            IPS_SetName($empId, 'PV-Heizung Leistung (W)');
+        }
+
         // Prüfen ob ein Parent (MQTT) verbunden ist
         if ($this->HasActiveParent()) {
             $this->SetStatus(102);
