@@ -24,11 +24,11 @@
         },
         {
             "type": "Label",
-            "caption": "── Manueller Vorrang ──────────────────────────"
+            "caption": "── Manuelles Heizen hat Vorrang ──────────────"
         },
         {
             "type": "Label",
-            "caption": "Schaltest du Heizung oder Gerät von Hand, wird die Variable 'PV-Automatik freigegeben' auf AUS gesetzt. Trage GENAU DIESE Variable im Energie Manager beim Verbraucher unter 'Bedingung' ein (muss WAHR sein) – nicht als Verbraucher! Als Verbraucher gehört 'PV-Heizung (Energie Manager)'."
+            "caption": "Schaltest du die Heizung über die Kacheln EIN, darf der Energie Manager sie NICHT ausschalten (Handschaltung gewinnt). Will der Energie Manager mangels Überschuss abschalten, kommt EINMALIG ein Push als Erinnerung, die Heizung selbst auszuschalten. Wichtig: im Energie Manager beim Spa-Verbraucher KEINE 'Bedingung' eintragen – der Vorrang wird hier im Modul geregelt."
         },
         {
             "type": "SelectScript",

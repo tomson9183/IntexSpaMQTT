@@ -106,9 +106,11 @@ class IntexSpaMQTT extends IPSModuleStrict
         // Nur Nachrichten unseres Spas vom MQTT-Server annehmen
         $this->SetReceiveDataFilter('.*' . preg_quote($base) . '.*');
 
-        // Die EM-Anbindungs-Variablen immer sichtbar lassen.
-        IPS_SetHidden($this->GetIDForIdent('EMSwitch'), false);
-        IPS_SetHidden($this->GetIDForIdent('AutomatikActive'), false);
+        // EM-Anbindungs-Variablen aus der Visualisierung ausblenden (sie werden
+        // automatisch bzw. vom Energie Manager genutzt - die Funktion bleibt davon
+        // unberührt, da der EM sie über die Objekt-ID anspricht).
+        IPS_SetHidden($this->GetIDForIdent('EMSwitch'), true);
+        IPS_SetHidden($this->GetIDForIdent('AutomatikActive'), true);
 
         // Altes Standard-Label auf neuen Namen umstellen (nur wenn unverändert,
         // damit eigene Umbenennungen erhalten bleiben).
@@ -245,32 +247,48 @@ class IntexSpaMQTT extends IPSModuleStrict
                 break;
 
             case 'Power':
-                // Manuelles Schalten des Geräts -> PV-Automatik pausieren
+                // Gerät manuell schalten - KEIN Push.
                 $on = (bool)$value;
                 $this->PublishSet('power', $on ? 'ON' : 'OFF');
                 $this->SetValue('Power', $on);
-                $this->ManualOverride($on ? 'Spa manuell EINGESCHALTET' : 'Spa manuell AUSGESCHALTET');
+                if (!$on) {
+                    // Gerät aus -> Heizung ist auch aus, manuelle Sitzung beendet
+                    $this->SetValue('Heater', false);
+                    $this->SetValue('AutomatikActive', true);
+                    $this->SetBuffer('EMOffNotified', '0');
+                }
                 break;
 
             case 'Heater':
-                // Manuelles Schalten der Heizung -> PV-Automatik pausieren
+                // Heizung manuell schalten - KEIN Push. Manuell EIN = Vorrang.
                 $on = (bool)$value;
                 $this->PublishSet('heater', $on ? 'ON' : 'OFF');
                 $this->SetValue('Heater', $on);
                 $this->SetValue('EMSwitch', $on);
-                $this->ManualOverride($on ? 'Heizung manuell EINGESCHALTET' : 'Heizung manuell AUSGESCHALTET');
+                // Manuelles Heizen hat Vorrang -> Automatik darf NICHT ausschalten
+                // (AutomatikActive = false). Beim Ausschalten Automatik wieder frei.
+                $this->SetValue('AutomatikActive', !$on);
+                $this->SetBuffer('EMOffNotified', '0'); // neue Sitzung -> Hinweis wieder möglich
                 break;
 
             case 'EMSwitch':
-                // Vom Energie Manager geschaltet -> Reihenfolge erledigen (kein manueller Vorrang)
+                // Befehl vom Energie Manager.
                 $on = (bool)$value;
-                // Schaltet der Energie Manager die Heizung AUS, obwohl du vorher
-                // manuell geheizt hast (Automatik pausiert) -> Push-Hinweis, dass
-                // deine Handschaltung gerade übersteuert/abgeschaltet wurde.
-                if (!$on && $this->GetValue('Heater') && !$this->GetValue('AutomatikActive')) {
-                    $this->notifyManual('Energie Manager hat die Heizung ausgeschaltet – du hattest manuell geheizt. Bei Bedarf wieder einschalten.');
+                if ($on) {
+                    // EM will einschalten -> normal mit Reihenfolge einschalten.
+                    $this->SwitchPVHeating(true);
+                } elseif (!$this->GetValue('AutomatikActive') && $this->GetValue('Heater')) {
+                    // Du heizt MANUELL -> Vorrang: NICHT ausschalten.
+                    // Nur EINMAL erinnern, die Heizung selbst auszuschalten.
+                    $this->SetValue('EMSwitch', false); // EM-Sicht übernehmen, kein erneutes Anfragen
+                    if ($this->GetBuffer('EMOffNotified') !== '1') {
+                        $this->notifyManual('Du heizt manuell – der Energie Manager würde die Heizung jetzt ausschalten (kein PV-Überschuss). Bitte denk daran, sie selbst auszuschalten.');
+                        $this->SetBuffer('EMOffNotified', '1');
+                    }
+                } else {
+                    // Automatikbetrieb -> normal ausschalten, KEIN Push.
+                    $this->SwitchPVHeating(false);
                 }
-                $this->SwitchPVHeating($on);
                 break;
 
             case 'AutomatikActive':
@@ -278,7 +296,7 @@ class IntexSpaMQTT extends IPSModuleStrict
                 $this->SetValue('AutomatikActive', (bool)$value);
                 if ((bool)$value) {
                     $this->SetBuffer('ManualSince', '0');
-                    $this->LogMessage('PV-Automatik wieder freigegeben.', KL_NOTIFY);
+                    $this->SetBuffer('EMOffNotified', '0');
                 }
                 break;
 
@@ -393,18 +411,6 @@ class IntexSpaMQTT extends IPSModuleStrict
      * PV-Automatik (AutomatikActive=false – im Energie Manager als Bedingung
      * nutzen) und schickt eine Erinnerung per Push/Log.
      */
-    private function ManualOverride(string $reason): void
-    {
-        if (!$this->ReadPropertyBoolean('EnableEnergyManager')) {
-            return;
-        }
-        if ($this->GetValue('AutomatikActive')) {
-            $this->SetValue('AutomatikActive', false);
-        }
-        $this->SetBuffer('ManualSince', (string)time());
-        $this->notifyManual($reason . ' – PV-Automatik pausiert.');
-    }
-
     private function notifyManual(string $text): void
     {
         $this->LogMessage($text, KL_NOTIFY);
