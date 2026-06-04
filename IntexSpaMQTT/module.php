@@ -108,10 +108,11 @@ class IntexSpaMQTT extends IPSModuleStrict
         $this->SetReceiveDataFilter('.*' . preg_quote($base) . '.*');
 
         $this->SetValue('EMPowerConsumption', $this->ReadPropertyInteger('PowerConsumptionHeating'));
-        $emOff = !$this->ReadPropertyBoolean('EnableEnergyManager');
-        IPS_SetHidden($this->GetIDForIdent('EMSwitch'), $emOff);
-        IPS_SetHidden($this->GetIDForIdent('EMPowerConsumption'), $emOff);
-        IPS_SetHidden($this->GetIDForIdent('AutomatikActive'), $emOff);
+        // Die EM-Anbindungs-Variablen immer sichtbar lassen (sonst "verschwinden"
+        // sie bei einem Update einer bestehenden Instanz, weil der Haken noch aus ist).
+        IPS_SetHidden($this->GetIDForIdent('EMSwitch'), false);
+        IPS_SetHidden($this->GetIDForIdent('EMPowerConsumption'), false);
+        IPS_SetHidden($this->GetIDForIdent('AutomatikActive'), false);
 
         // Prüfen ob ein Parent (MQTT) verbunden ist
         if ($this->HasActiveParent()) {
