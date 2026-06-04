@@ -147,6 +147,9 @@ class IntexSpaMQTT extends IPSModuleStrict
             return '';
         }
 
+        // DIAGNOSE: jede empfangene Nachricht ins Meldungsfenster
+        $this->LogMessage('RX  ' . $topic . ' = ' . $payload, KL_NOTIFY);
+
         $this->HandleTopic((string)$topic, (string)$payload);
         return '';
     }
@@ -160,6 +163,9 @@ class IntexSpaMQTT extends IPSModuleStrict
         }
         $key = substr($topic, strlen($prefix));
         $on = (strtoupper($payload) === 'ON' || strtoupper($payload) === 'TRUE' || $payload === '1');
+
+        // DIAGNOSE: was wird aus dem Status gemacht
+        $this->LogMessage('STATUS key=' . $key . ' payload=' . $payload . ' -> on=' . ($on ? '1' : '0'), KL_NOTIFY);
 
         switch ($key) {
             case 'online':
@@ -193,6 +199,9 @@ class IntexSpaMQTT extends IPSModuleStrict
 
     public function RequestAction(string $ident, mixed $value): void
     {
+        // DIAGNOSE: jeder Schaltklick ins Meldungsfenster
+        $this->LogMessage('ACTION ' . $ident . ' = ' . json_encode($value), KL_NOTIFY);
+
         switch ($ident) {
             case 'Power':
             case 'Filter':
