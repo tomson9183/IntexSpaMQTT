@@ -44,6 +44,40 @@
         },
         {
             "type": "Label",
+            "caption": "── Erinnerung: manuell geheizt, aber kein PV-Überschuss ──"
+        },
+        {
+            "type": "Label",
+            "caption": "Wenn du manuell heizt (Automatik pausiert) und kein Überschuss mehr da ist, bleibt die Heizung an. Dann kommt eine Push-Erinnerung, sie manuell auszuschalten. Hier die Überschuss-Variable (W) wählen – 0/leer = Erinnerung aus. Es wird NICHTS automatisch geschaltet."
+        },
+        {
+            "type": "SelectVariable",
+            "name": "ReminderSurplusVariableID",
+            "caption": "Überschuss-Variable in W (z. B. 'PV Überschuss W')"
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "ReminderThresholdWatt",
+            "caption": "Unter wie viel Watt gilt 'kein Überschuss mehr'",
+            "minimum": 0,
+            "maximum": 5000
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "ReminderDelayMinutes",
+            "caption": "So viele Minuten Mangel, bevor erinnert wird",
+            "minimum": 1,
+            "maximum": 120
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "ReminderRepeatMinutes",
+            "caption": "Erinnerung wiederholen alle X Minuten (0 = nur einmal)",
+            "minimum": 0,
+            "maximum": 240
+        },
+        {
+            "type": "Label",
             "caption": "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         }
     ],

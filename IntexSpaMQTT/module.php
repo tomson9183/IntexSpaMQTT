@@ -42,6 +42,11 @@ class IntexSpaMQTT extends IPSModuleStrict
         // Leistung/Schwellen werden NICHT hier gesetzt, sondern im Energie Manager.
         $this->RegisterPropertyInteger('ManualPushScriptID', 0);
         $this->RegisterPropertyInteger('ManualOverrideResumeHours', 0);
+        // Erinnerung: manuell geheizt, aber kein PV-Überschuss mehr -> Push
+        $this->RegisterPropertyInteger('ReminderSurplusVariableID', 0); // Überschuss-Variable (W); 0 = aus
+        $this->RegisterPropertyInteger('ReminderThresholdWatt', 300);    // darunter gilt: kein Überschuss mehr
+        $this->RegisterPropertyInteger('ReminderDelayMinutes', 5);       // so lange Mangel, bevor erinnert wird
+        $this->RegisterPropertyInteger('ReminderRepeatMinutes', 30);     // Wiederholung (0 = nur einmal)
 
         $this->RegisterVariableBoolean('Power', 'Gerät Ein/Aus', '~Switch', 10);
         $this->EnableAction('Power');
@@ -358,11 +363,14 @@ class IntexSpaMQTT extends IPSModuleStrict
     private function SwitchPVHeating(bool $on): void
     {
         if ($on) {
-            // Die Bruecke sorgt selbst fuer die richtige Reihenfolge (Geraet an ->
-            // kurz warten -> Heizung an, inkl. zweitem Versuch). Hier nur den
-            // Heizbefehl senden und die Anzeige sofort setzen.
+            if (!$this->GetValue('Power')) {
+                // Gerät war aus: erst Strom an, dann dem Spa kurz Zeit geben,
+                // bevor der Heizbefehl kommt (sonst ignoriert er ihn).
+                $this->PublishSet('power', 'ON');
+                $this->SetValue('Power', true);
+                IPS_Sleep(2500);
+            }
             $this->PublishSet('heater', 'ON');
-            $this->SetValue('Power', true);
             $this->SetValue('Heater', true);
         } else {
             $this->PublishSet('heater', 'OFF');
@@ -401,6 +409,60 @@ class IntexSpaMQTT extends IPSModuleStrict
         $sid = $this->ReadPropertyInteger('ManualPushScriptID');
         if ($sid > 0 && @IPS_ScriptExists($sid)) {
             @IPS_RunScriptEx($sid, ['Titel' => 'Intex Spa', 'Text' => $text]);
+        }
+    }
+
+    /**
+     * Erinnerung, wenn manuell geheizt wird (PV-Automatik pausiert) UND kein
+     * PV-Überschuss mehr da ist. Die Heizung bleibt in diesem Fall an, weil die
+     * Automatik die Handschaltung nicht übersteuert – daher die Push-Erinnerung,
+     * sie manuell auszuschalten. Schaltet selbst NICHTS, nur Hinweis.
+     * Wird jede Minute über CheckSchedule aufgerufen.
+     */
+    private function CheckManualHeatingReminder(): void
+    {
+        if (!$this->ReadPropertyBoolean('EnableEnergyManager')) {
+            return;
+        }
+        $varID = $this->ReadPropertyInteger('ReminderSurplusVariableID');
+        if ($varID <= 0 || !IPS_VariableExists($varID)) {
+            return;
+        }
+
+        // Nur relevant, wenn Heizung läuft UND die Automatik pausiert ist (manuell)
+        $manuellAktiv = !$this->GetValue('AutomatikActive');
+        if (!$this->GetValue('Heater') || !$manuellAktiv) {
+            $this->SetBuffer('ReminderLowSince', '0');
+            $this->SetBuffer('ReminderLast', '0');
+            return;
+        }
+
+        $surplus   = (float)GetValue($varID);
+        $threshold = $this->ReadPropertyInteger('ReminderThresholdWatt');
+        $now       = time();
+
+        if ($surplus >= $threshold) {
+            // Genug Überschuss -> kein Hinweis, Zähler zurücksetzen
+            $this->SetBuffer('ReminderLowSince', '0');
+            return;
+        }
+
+        // Mangel: seit wann?
+        $lowSince = (int)$this->GetBuffer('ReminderLowSince');
+        if ($lowSince === 0) {
+            $this->SetBuffer('ReminderLowSince', (string)$now);
+            $lowSince = $now;
+        }
+        if (($now - $lowSince) < $this->ReadPropertyInteger('ReminderDelayMinutes') * 60) {
+            return; // Mangel noch nicht lange genug
+        }
+
+        // Wiederholungsintervall beachten
+        $last   = (int)$this->GetBuffer('ReminderLast');
+        $repeat = $this->ReadPropertyInteger('ReminderRepeatMinutes') * 60;
+        if ($last === 0 || ($repeat > 0 && ($now - $last) >= $repeat)) {
+            $this->notifyManual('Heizung läuft ohne PV-Überschuss – bitte manuell ausschalten.');
+            $this->SetBuffer('ReminderLast', (string)$now);
         }
     }
 
@@ -444,6 +506,7 @@ class IntexSpaMQTT extends IPSModuleStrict
     public function CheckSchedule(): void
     {
         $this->AutoResumeAutomatik();
+        $this->CheckManualHeatingReminder();
 
         $json = $this->GetValue('Schedule');
         $entries = json_decode($json, true);
