@@ -16,18 +16,11 @@
         {
             "type": "CheckBox",
             "name": "EnableEnergyManager",
-            "caption": "PV-Heizung-Schalter bereitstellen (für Energie Manager)"
+            "caption": "PV-Heizung-Schalter & manuellen Vorrang bereitstellen"
         },
         {
             "type": "Label",
-            "caption": "Es entsteht die Variable 'PV-Heizung (Energie Manager)'. Diese trägst du im Energie Manager als Verbraucher ein. Beim Einschalten macht das Modul automatisch zuerst den Strom an und dann die Heizung; beim Ausschalten erst die Heizung aus und dann das Gerät (falls keine andere Funktion läuft)."
-        },
-        {
-            "type": "NumberSpinner",
-            "name": "PowerConsumptionHeating",
-            "caption": "Leistungsaufnahme Heizung in Watt (typisch: 2200)",
-            "minimum": 100,
-            "maximum": 5000
+            "caption": "Dieses Modul rechnet NICHTS – Leistung, Überschuss-Schwellen, Mindest-/Nachlaufzeit und Priorität stellst du komplett im Energie Manager ein. Hier entsteht nur die Variable 'PV-Heizung (Energie Manager)', die der Energie Manager als Verbraucher schaltet. Beim EIN macht das Modul automatisch erst Strom an, dann Heizung; beim AUS erst Heizung aus, dann das Gerät (falls keine andere Funktion läuft)."
         },
         {
             "type": "Label",
@@ -35,7 +28,7 @@
         },
         {
             "type": "Label",
-            "caption": "Schaltest du Heizung oder Gerät von Hand (Kachel/Gerät), wird die Variable 'PV-Automatik freigegeben' auf AUS gesetzt. Trage diese Variable im Energie Manager beim Verbraucher unter 'Bedingung' ein (muss WAHR sein) – dann übersteuert die Automatik deine Handschaltung nicht mehr."
+            "caption": "Schaltest du Heizung oder Gerät von Hand, wird die Variable 'PV-Automatik freigegeben' auf AUS gesetzt. Trage GENAU DIESE Variable im Energie Manager beim Verbraucher unter 'Bedingung' ein (muss WAHR sein) – nicht als Verbraucher! Als Verbraucher gehört 'PV-Heizung (Energie Manager)'."
         },
         {
             "type": "SelectScript",
@@ -71,15 +64,7 @@
         }
     ],
     "status": [
-        {
-            "code": 102,
-            "icon": "active",
-            "caption": "Aktiv"
-        },
-        {
-            "code": 104,
-            "icon": "inactive",
-            "caption": "Kein MQTT-Parent verbunden"
-        }
+        { "code": 102, "icon": "active", "caption": "Aktiv" },
+        { "code": 104, "icon": "inactive", "caption": "Kein MQTT-Parent verbunden" }
     ]
 }

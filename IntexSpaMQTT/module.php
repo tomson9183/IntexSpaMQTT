@@ -38,8 +38,8 @@ class IntexSpaMQTT extends IPSModuleStrict
 
         $this->RegisterPropertyString('BaseTopic', 'intexspa');
         $this->RegisterPropertyBoolean('EnableEnergyManager', true);
-        $this->RegisterPropertyInteger('PowerConsumptionHeating', 2200);
-        // Manueller Vorrang: optionales Push-Skript + automatische Wiederfreigabe
+        // Manueller Vorrang: optionales Push-Skript + automatische Wiederfreigabe.
+        // Leistung/Schwellen werden NICHT hier gesetzt, sondern im Energie Manager.
         $this->RegisterPropertyInteger('ManualPushScriptID', 0);
         $this->RegisterPropertyInteger('ManualOverrideResumeHours', 0);
 
@@ -68,7 +68,6 @@ class IntexSpaMQTT extends IPSModuleStrict
         // beim Schalten die Reihenfolge (Strom -> Heizung an / Heizung -> Strom aus).
         $this->RegisterVariableBoolean('EMSwitch', 'PV-Heizung (Energie Manager)', '~Switch', 100);
         $this->EnableAction('EMSwitch');
-        $this->RegisterVariableInteger('EMPowerConsumption', 'PV-Heizung Leistung (W)', '', 110);
 
         // Manueller Vorrang: solange false, soll die PV-Automatik NICHT schalten
         // (im Energie Manager als Bedingung verwenden). Wird durch manuelles
@@ -107,11 +106,8 @@ class IntexSpaMQTT extends IPSModuleStrict
         // Nur Nachrichten unseres Spas vom MQTT-Server annehmen
         $this->SetReceiveDataFilter('.*' . preg_quote($base) . '.*');
 
-        $this->SetValue('EMPowerConsumption', $this->ReadPropertyInteger('PowerConsumptionHeating'));
-        // Die EM-Anbindungs-Variablen immer sichtbar lassen (sonst "verschwinden"
-        // sie bei einem Update einer bestehenden Instanz, weil der Haken noch aus ist).
+        // Die EM-Anbindungs-Variablen immer sichtbar lassen.
         IPS_SetHidden($this->GetIDForIdent('EMSwitch'), false);
-        IPS_SetHidden($this->GetIDForIdent('EMPowerConsumption'), false);
         IPS_SetHidden($this->GetIDForIdent('AutomatikActive'), false);
 
         // Altes Standard-Label auf neuen Namen umstellen (nur wenn unverändert,
@@ -120,9 +116,11 @@ class IntexSpaMQTT extends IPSModuleStrict
         if ($emId && IPS_GetName($emId) === 'EM Schaltvariable (Heizung)') {
             IPS_SetName($emId, 'PV-Heizung (Energie Manager)');
         }
-        $empId = $this->GetIDForIdent('EMPowerConsumption');
-        if ($empId && IPS_GetName($empId) === 'EM Leistungsaufnahme (W)') {
-            IPS_SetName($empId, 'PV-Heizung Leistung (W)');
+
+        // Alte Leistungs-Variable aus früheren Versionen entfernen
+        // (Leistung wird jetzt ausschließlich im Energie Manager gesetzt).
+        if (@$this->GetIDForIdent('EMPowerConsumption')) {
+            $this->UnregisterVariable('EMPowerConsumption');
         }
 
         // Prüfen ob ein Parent (MQTT) verbunden ist
