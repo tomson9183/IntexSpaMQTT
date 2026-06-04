@@ -358,15 +358,11 @@ class IntexSpaMQTT extends IPSModuleStrict
     private function SwitchPVHeating(bool $on): void
     {
         if ($on) {
-            if (!$this->GetValue('Power')) {
-                // Gerät war aus: erst Strom an, dann dem Spa kurz Zeit geben,
-                // bevor der Heizbefehl kommt (sonst ignoriert er ihn -> Heizung
-                // ginge erst beim zweiten Schalten an).
-                $this->PublishSet('power', 'ON');
-                $this->SetValue('Power', true);
-                IPS_Sleep(2500);
-            }
+            // Die Bruecke sorgt selbst fuer die richtige Reihenfolge (Geraet an ->
+            // kurz warten -> Heizung an, inkl. zweitem Versuch). Hier nur den
+            // Heizbefehl senden und die Anzeige sofort setzen.
             $this->PublishSet('heater', 'ON');
+            $this->SetValue('Power', true);
             $this->SetValue('Heater', true);
         } else {
             $this->PublishSet('heater', 'OFF');
