@@ -275,7 +275,14 @@ class IntexSpaMQTT extends IPSModuleStrict
                 // Befehl vom Energie Manager.
                 $on = (bool)$value;
                 if ($on) {
-                    // EM will einschalten -> normal mit Reihenfolge einschalten.
+                    // Lief die Heizung NICHT bereits manuell, ist dies ein Automatik-
+                    // Start -> Automatik als aktiv markieren, damit der EM später auch
+                    // wieder ausschalten darf. Lief sie manuell (Heater bereits an,
+                    // Automatik aus), bleibt der manuelle Vorrang unangetastet.
+                    if (!$this->GetValue('Heater')) {
+                        $this->SetValue('AutomatikActive', true);
+                        $this->SetBuffer('EMOffNotified', '0');
+                    }
                     $this->SwitchPVHeating(true);
                 } elseif (!$this->GetValue('AutomatikActive') && $this->GetValue('Heater')) {
                     // Du heizt MANUELL -> Vorrang: NICHT ausschalten.
@@ -393,12 +400,18 @@ class IntexSpaMQTT extends IPSModuleStrict
             $this->PublishSet('heater', 'ON');
             $this->SetValue('Heater', true);
         } else {
+            // Erst die Heizung sauber ausschalten ...
             $this->PublishSet('heater', 'OFF');
             $this->SetValue('Heater', false);
             $otherActive = $this->GetValue('Jets')
                 || $this->GetValue('Bubbles')
                 || $this->GetValue('Sanitizer');
             if (!$otherActive) {
+                // ... dem Spa kurz Zeit geben, das "Heizung AUS" zu verarbeiten,
+                // BEVOR der Strom abgeschaltet wird. Ohne diese Pause verschluckt
+                // der Spa einen der beiden schnell aufeinanderfolgenden Befehle,
+                // und das Heizrelais bleibt hängen (Heizung läuft weiter).
+                IPS_Sleep(2500);
                 $this->PublishSet('power', 'OFF');
                 $this->SetValue('Power', false);
             }
