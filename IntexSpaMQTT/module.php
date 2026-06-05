@@ -195,6 +195,28 @@ class IntexSpaMQTT extends IPSModuleStrict
         return $p;
     }
 
+    // Nach einem eigenen Schaltbefehl widersprechende (veraltete) Statusmeldungen
+    // kurz ignorieren, damit frisch geschaltete Kacheln nicht zurückspringen
+    // (der Tuya-Status hinkt nach dem lokalen Schalten nach).
+    private const CMD_SUPPRESS = 8; // Sekunden
+
+    private function markCmd(string $name, bool $on): void
+    {
+        $this->SetBuffer('cmd_' . $name, json_encode([$on, time()]));
+    }
+
+    private function statusAllowed(string $name, bool $on): bool
+    {
+        $raw = $this->GetBuffer('cmd_' . $name);
+        if ($raw !== '') {
+            $c = json_decode($raw, true);
+            if (is_array($c) && (time() - (int)$c[1]) < self::CMD_SUPPRESS && (bool)$c[0] !== $on) {
+                return false; // gerade anders geschaltet -> veralteten Status verwerfen
+            }
+        }
+        return true;
+    }
+
     private function HandleTopic(string $topic, string $payload): void
     {
         $base = $this->ReadPropertyString('BaseTopic');
@@ -209,8 +231,16 @@ class IntexSpaMQTT extends IPSModuleStrict
             case 'online':
                 $this->SetValue('Connected', strtolower($payload) === 'online');
                 break;
-            case 'power':     $this->SetValue('Power', $on); break;
-            case 'heater':    $this->SetValue('Heater', $on); $this->SetValue('EMSwitch', $on); break;
+            case 'power':
+                if ($this->statusAllowed('power', $on)) { $this->SetValue('Power', $on); }
+                break;
+            case 'heater':
+                // WICHTIG: EMSwitch hier NICHT setzen! EMSwitch ist die Steuervariable
+                // des Energie Managers. Ein (oft nachhinkender/veralteter) Gerätestatus
+                // darf sie nicht umschalten – sonst verliert der EM den Bezug und sendet
+                // z.B. den Ausschaltbefehl nicht mehr (Gerät bleibt an).
+                if ($this->statusAllowed('heater', $on)) { $this->SetValue('Heater', $on); }
+                break;
             case 'filter':    $this->SetValue('Filter', $on); break;
             case 'bubbles':   $this->SetValue('Bubbles', $on); break;
             case 'jets':      $this->SetValue('Jets', $on); break;
@@ -250,10 +280,13 @@ class IntexSpaMQTT extends IPSModuleStrict
                 // Gerät manuell schalten - KEIN Push.
                 $on = (bool)$value;
                 $this->PublishSet('power', $on ? 'ON' : 'OFF');
+                $this->markCmd('power', $on);
                 $this->SetValue('Power', $on);
                 if (!$on) {
                     // Gerät aus -> Heizung ist auch aus, manuelle Sitzung beendet
                     $this->SetValue('Heater', false);
+                    $this->markCmd('heater', false);
+                    $this->SetValue('EMSwitch', false);
                     $this->SetValue('AutomatikActive', true);
                     $this->SetBuffer('EMOffNotified', '0');
                 }
@@ -263,6 +296,7 @@ class IntexSpaMQTT extends IPSModuleStrict
                 // Heizung manuell schalten - KEIN Push. Manuell EIN = Vorrang.
                 $on = (bool)$value;
                 $this->PublishSet('heater', $on ? 'ON' : 'OFF');
+                $this->markCmd('heater', $on);
                 $this->SetValue('Heater', $on);
                 $this->SetValue('EMSwitch', $on);
                 // Manuelles Heizen hat Vorrang -> Automatik darf NICHT ausschalten
@@ -394,14 +428,17 @@ class IntexSpaMQTT extends IPSModuleStrict
                 // Gerät war aus: erst Strom an, dann dem Spa kurz Zeit geben,
                 // bevor der Heizbefehl kommt (sonst ignoriert er ihn).
                 $this->PublishSet('power', 'ON');
+                $this->markCmd('power', true);
                 $this->SetValue('Power', true);
                 IPS_Sleep(2500);
             }
             $this->PublishSet('heater', 'ON');
+            $this->markCmd('heater', true);
             $this->SetValue('Heater', true);
         } else {
             // Erst die Heizung sauber ausschalten ...
             $this->PublishSet('heater', 'OFF');
+            $this->markCmd('heater', false);
             $this->SetValue('Heater', false);
             $otherActive = $this->GetValue('Jets')
                 || $this->GetValue('Bubbles')
@@ -413,6 +450,7 @@ class IntexSpaMQTT extends IPSModuleStrict
                 // und das Heizrelais bleibt hängen (Heizung läuft weiter).
                 IPS_Sleep(2500);
                 $this->PublishSet('power', 'OFF');
+                $this->markCmd('power', false);
                 $this->SetValue('Power', false);
             }
         }
